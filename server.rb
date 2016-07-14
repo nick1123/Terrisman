@@ -10,6 +10,7 @@ DATA_KEY     = 'data'
 META_KEY     = 'meta'
 MESSAGES_KEY = 'messages'
 GUID_KEY     = 'guid'
+SECRET_KEY   = 'secret'
 EXPIRES_KEY  = 'expires_at'
 APP_NAME     = 'terrisman'
 
@@ -37,6 +38,7 @@ def build_job(guid)
     },
     META_KEY => {
       GUID_KEY => guid,
+      SECRET_KEY => build_secret,
       EXPIRES_KEY => build_expires_at
     }
   }
@@ -46,18 +48,25 @@ def redis_key_for_job(guid)
   "#{APP_NAME}:job:#{guid}"
 end
 
-get '/logs/:guid' do
-  "Hello #{params['guid']}!"
+post '/jobs/:guid' do
+  guid = params['guid']
+  job_key = redis_key_for_job(guid)
+
+  data = JSON.parse(redis.get(job_key))
+
+  data[DATA_KEY][MESSAGES_KEY] << {
+    message: params[:message],
+    created_at: Time.now.to_i
+  }
+
+  redis.set(job_key, data.to_json)
+  {status: 'success'}.to_json
 end
 
-# curl -X POST --data "" http://localhost:4567/jobs/
 post '/jobs/' do
   guid = build_guid
   value = build_job(guid).to_json
-  redis.set(
-    redis_key_for_job(guid),
-    value
-  )
+  redis.set(redis_key_for_job(guid), value)
   value
 end
 
